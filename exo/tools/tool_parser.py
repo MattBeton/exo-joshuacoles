@@ -4,9 +4,11 @@ from pydantic import BaseModel
 
 from exo.api.inference_result_manager import InferenceResultChunk
 
+
 class UnplacedToolCall(BaseModel):
   name: str
   arguments: str
+
 
 class ToolParser(ABC):
   @abstractmethod
@@ -18,6 +20,10 @@ class ToolParser(ABC):
     """
     Parse
     """
+    ...
+
+  @abstractmethod
+  def to_grammar(self) -> str:
     ...
 
 

@@ -50,8 +50,15 @@ class ChatCompletionRequest:
 
   def to_generation_options(self) -> GenerationOptions:
     grammar_definition = None
+    tool_parser = self.get_tool_parser()
+
+    if self.response_format and tool_parser:
+      raise ValueError("Cannot use response_format and tools at the same time")
+
     if self.response_format is not None:
       grammar_definition = self.response_format.to_grammar()
+    elif tool_parser:
+      grammar_definition = tool_parser.to_grammar()
 
     return GenerationOptions(max_completion_tokens=self.max_completion_tokens, stop=self.stop, grammar_definition=grammar_definition)
 
