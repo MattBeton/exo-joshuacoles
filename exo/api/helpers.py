@@ -1,5 +1,5 @@
 import time
-from typing import Union, List, Dict, Optional, Literal
+from typing import Union, List, Dict, Optional, Literal, Any
 
 from pydantic import BaseModel
 
@@ -30,8 +30,22 @@ class ToolBehaviour(BaseModel):
   parsed: bool = True
 
 
+class ToolDefinition(BaseModel):
+  """
+  This model maps to elements of the tools array in the request body.
+  """
+  class FunctionDefinition(BaseModel):
+    name: str
+    description: Optional[str]
+    parameters: Optional[dict[str, Any]]
+    strict: Optional[bool] = False
+
+  type: Literal["function"]
+  function: FunctionDefinition
+
+
 class ChatCompletionRequest:
-  def __init__(self, model: str, messages: List[Message], temperature: float, tools: Optional[List[Dict]] = None,
+  def __init__(self, model: str, messages: List[Message], temperature: float, tools: Optional[List[ToolDefinition]] = None,
                max_completion_tokens: Optional[int] = None, stop: Optional[Union[str, List[str]]] = None, response_format: Optional[ResponseFormat] = None,
                tool_choice: Optional[ToolChoice] = None, tool_behaviour: Optional[ToolBehaviour] = None):
     self.model = model
@@ -194,7 +208,7 @@ def parse_chat_request(data: dict, default_model: str):
     data.get("model", default_model),
     [parse_message(msg) for msg in data["messages"]],
     data.get("temperature", 0.0),
-    data.get("tools", None),
+    [ToolDefinition.model_validate(tool) for tool in data["tools"]] if "tools" in data else None,
     # The max_tokens field is deprecated, but some clients may still use it, fall back to that value if
     # max_completion_tokens is not provided.
     data.get("max_completion_tokens", data.get("max_tokens", None)),

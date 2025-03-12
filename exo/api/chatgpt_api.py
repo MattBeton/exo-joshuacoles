@@ -257,6 +257,8 @@ class ChatGPTAPI:
         # Non-streaming mode: get complete result
         result = await self.result_manager.get_complete_inference_result(request_id, timeout=self.response_timeout)
 
+        # TODO: Implement tool calling for non-streamed responses
+
         return web.json_response(
           generate_completion(
             chat_request,

@@ -12,6 +12,8 @@ class ModelCard(BaseModel):
   layers: int
   repo: dict[InferenceEngineType, str]
 
+  chat_template: Optional[str] = None
+
 ModelCardCollection = dict[str, ModelCard]
 
 model_cards: ModelCardCollection = {
