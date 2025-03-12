@@ -419,7 +419,15 @@ async def test_function_calling_with_tool_choice(client):
   # Test allowing the model to choose whether to call the function
   response = client.chat.completions.create(
     model=TEST_MODEL,
-    messages=[{"role": "user", "content": "Hello, how are you?"}],  # Unrelated to weather
+    messages=[
+      {"role": "system", "content": """You are an expert in composing functions. You are given a question and a set of possible functions. Based on the question, you may need to make one or more function/tool calls to achieve the purpose.
+      You should only invoke the function(s) which will assist you in fulfilling the user's request, if their request does not require any function call, you should reply to them directly as a helpful assistant.
+      You MUST NOT make any assumptions about what tools you have access to or set of functions you can generate.
+      You SHOULD NOT make any function calls that are not provided in the list of functions.
+      You SHOULD NOT make any function calls that are not needed to answer the question.
+      You should only return the function call in tools call sections."""},
+      {"role": "user", "content": "Hello, how are you?"}
+    ],  # Unrelated to weather
     tools=tools,
     tool_choice="auto",
     temperature=0.0

@@ -21,7 +21,7 @@ class WattToolParser(ToolParser):
 
   def _generate_function_names(self, tools) -> str:
     """Generate a grammar rule for function names based on available tools."""
-    function_names = [tool.name for tool in tools]
+    function_names = [tool.function.name for tool in tools]
     if not function_names:
       return '""'  # Empty string if no functions available
     return ' | '.join([f'"{name}"' for name in function_names])

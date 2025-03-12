@@ -13,7 +13,8 @@ from exo import DEBUG
 from exo.helpers import PrefixDict, shutdown, get_exo_images_dir, VERSION
 from exo.inference.tokenizers import resolve_tokenizer, Tokenizer
 from exo.orchestration import Node
-from exo.models import build_base_shard, build_full_shard, model_cards, get_repo, get_supported_models, get_pretty_name
+from exo.models import build_base_shard, build_full_shard, model_cards, get_repo, get_supported_models, get_pretty_name, \
+  get_model_card
 from PIL import Image
 import numpy as np
 import base64
@@ -26,7 +27,6 @@ from exo.download.download_progress import RepoProgressEvent
 from exo.download.new_shard_download import delete_model
 import tempfile
 from exo.apputil import create_animation_mp4
-from collections import defaultdict
 from .inference_result_manager import InferenceResultManager
 
 if platform.system().lower() == "darwin" and platform.machine().lower() == "arm64":
@@ -205,12 +205,16 @@ class ChatGPTAPI:
         status=400,
       )
 
+    model_card = get_model_card(chat_request.model)
     tokenizer = await resolve_tokenizer(get_repo(shard.model_id, self.inference_engine_classname))
     if DEBUG >= 4: print(f"[ChatGPTAPI] Resolved tokenizer: {tokenizer}")
 
     # Add system prompt if set
     if self.system_prompt and not any(msg.role == "system" for msg in chat_request.messages):
       chat_request.messages.insert(0, Message("system", self.system_prompt))
+
+    if model_card and model_card.chat_template:
+      tokenizer.chat_template = model_card.chat_template
 
     prompt = build_prompt(tokenizer, chat_request.messages, [tool.model_dump() for tool in chat_request.get_tools()])
     request_id = str(uuid.uuid4())

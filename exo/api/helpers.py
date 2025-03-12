@@ -176,8 +176,8 @@ def remap_messages(messages: List[Message]) -> List[Message]:
 
 
 def build_prompt(tokenizer, _messages: List[Message], tools: Optional[List[Dict]] = None):
-  messages = remap_messages(_messages)
-  chat_template_args = {"conversation": [m.to_dict() for m in messages], "tokenize": False, "add_generation_prompt": True}
+  messages = _messages # TODO: Re-enable remap_messages(_messages)
+  chat_template_args = {"conversation": [m if isinstance(m, Dict) else m.to_dict() for m in messages], "tokenize": False, "add_generation_prompt": True}
   if tools:
     chat_template_args["tools"] = tools
 
@@ -206,7 +206,7 @@ def parse_message(data: dict):
 def parse_chat_request(data: dict, default_model: str):
   return ChatCompletionRequest(
     data.get("model", default_model),
-    [parse_message(msg) for msg in data["messages"]],
+    data["messages"],
     data.get("temperature", 0.0),
     [ToolDefinition.model_validate(tool) for tool in data["tools"]] if "tools" in data else None,
     # The max_tokens field is deprecated, but some clients may still use it, fall back to that value if

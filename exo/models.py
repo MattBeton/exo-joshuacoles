@@ -562,12 +562,15 @@ def get_repo(model_id: str, inference_engine_classname: str) -> Optional[str]:
   else:
     return None
 
+def get_model_card(mode_id) -> Optional[ModelCard]:
+  return model_cards.get(mode_id)
+
 def get_pretty_name(model_id: str) -> Optional[str]:
   model_card = model_cards.get(model_id)
   return model_card.pretty_name if model_card else None
 
 def get_default_tool_format(model_id: str) -> Optional[str]:
-  return "llama_python_tag"
+  return get_model_card(model_id).default_tool_call_format
 
 def build_base_shard(model_id: str, inference_engine_classname: str) -> Optional[Shard]:
   model_card = model_cards.get(model_id)
