@@ -30,7 +30,7 @@ def choose_tools(tool_choice: ToolChoice, tools: List[Any]) -> List[Any]:
   elif tool_choice == "required":
     return tools
   elif isinstance(tool_choice, SpecificToolChoice):
-    return [tool for tool in tools if tool.name == tool_choice.function.name]
+    return [tool for tool in tools if tool.function.name == tool_choice.function.name]
   elif tool_choice is None:
     return tools
   else:

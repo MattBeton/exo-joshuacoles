@@ -201,7 +201,7 @@ class ChatGPTAPI:
     if self.system_prompt and not any(msg.role == "system" for msg in chat_request.messages):
       chat_request.messages.insert(0, Message("system", self.system_prompt))
 
-    prompt = build_prompt(tokenizer, chat_request.messages, chat_request.get_tools())
+    prompt = build_prompt(tokenizer, chat_request.messages, [tool.model_dump() for tool in chat_request.get_tools()])
     request_id = str(uuid.uuid4())
 
     # Register tokenizer and model with the result manager
@@ -322,7 +322,7 @@ class ChatGPTAPI:
             "choices": [{
               "index": 0,
               "logprobs": None,
-              "finish_reason": tool_chunk.finish_reason,
+              "finish_reason": 'tool_calls',
               "delta": {
                 "tool_calls": tool_calls,
               }
