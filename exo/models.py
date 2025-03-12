@@ -562,6 +562,9 @@ def get_pretty_name(model_id: str) -> Optional[str]:
   model_card = model_cards.get(model_id)
   return model_card.pretty_name if model_card else None
 
+def get_default_tool_format(model_id: str) -> Optional[str]:
+  ...
+
 def build_base_shard(model_id: str, inference_engine_classname: str) -> Optional[Shard]:
   model_card = model_cards.get(model_id)
   if not model_card:

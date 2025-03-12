@@ -6,8 +6,9 @@ from pydantic import BaseModel
 from exo import VERSION, DEBUG
 from exo.api.response_formats import ResponseFormat, ResponseFormatAdapter
 from exo.inference.generation_options import GenerationOptions
+from exo.models import get_default_tool_format
 from exo.tools import ToolChoice, ToolChoiceModel
-from exo.tools.tool_parser import ToolParser
+from exo.tools.tool_parser import ToolParser, get_tool_parser_by_name
 
 
 class Message:
@@ -63,7 +64,20 @@ class ChatCompletionRequest:
     return GenerationOptions(max_completion_tokens=self.max_completion_tokens, stop=self.stop, grammar_definition=grammar_definition)
 
   def get_tool_parser(self) -> Optional[ToolParser]:
-    return None
+    if self.tool_behaviour and not self.tool_behaviour.guided:
+      return None
+
+    if self.tool_choice == "none":
+      return None
+
+    if self.tools is None or len(self.tools) == 0:
+      return None
+
+    tool_format = get_default_tool_format(self.model)
+    if self.tool_behaviour:
+      tool_format = self.tool_behaviour.format or tool_format
+
+    return get_tool_parser_by_name(tool_format)
 
 def generate_completion(
   chat_request: ChatCompletionRequest,

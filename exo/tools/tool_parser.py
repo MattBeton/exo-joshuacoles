@@ -27,5 +27,5 @@ class ToolParser(ABC):
     ...
 
 
-def tool_parser_by_name(name: str) -> ToolParser:
+def get_tool_parser_by_name(name: str) -> ToolParser:
   ...
