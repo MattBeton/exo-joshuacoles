@@ -47,7 +47,7 @@ class ToolDefinition(BaseModel):
 class ChatCompletionRequest:
   def __init__(self, model: str, messages: List[Message], temperature: float, tools: Optional[List[ToolDefinition]] = None,
                max_completion_tokens: Optional[int] = None, stop: Optional[Union[str, List[str]]] = None, response_format: Optional[ResponseFormat] = None,
-               tool_choice: Optional[ToolChoice] = None, tool_behaviour: Optional[ToolBehaviour] = None):
+               tool_choice: Optional[ToolChoice] = None, tool_behaviour: Optional[ToolBehaviour] = None, parallel_tool_calling: Optional[bool] = None):
     self.model = model
     self.messages = messages
     self.temperature = temperature
@@ -57,11 +57,13 @@ class ChatCompletionRequest:
     self.response_format = response_format
     self.tool_choice = tool_choice
     self.tool_behaviour = tool_behaviour
+    self.parallel_tool_calling = parallel_tool_calling
 
   def to_dict(self):
     return {"model": self.model, "messages": [message.to_dict() for message in self.messages],
             "temperature": self.temperature, "tools": self.tools, "max_completion_tokens": self.max_completion_tokens,
-            "stop": self.stop, "response_format": self.response_format.model_dump() if self.response_format else None, "tool_choice": self.tool_choice, "tool_behaviour": self.tool_behaviour.model_dump() if self.tool_behaviour else None}
+            "stop": self.stop, "response_format": self.response_format.model_dump() if self.response_format else None, "tool_choice": self.tool_choice, "tool_behaviour": self.tool_behaviour.model_dump() if self.tool_behaviour else None,
+            "parallel_tool_calling": self.parallel_tool_calling}
 
   def to_generation_options(self) -> GenerationOptions:
     grammar_definition = None
@@ -73,7 +75,7 @@ class ChatCompletionRequest:
     if self.response_format is not None:
       grammar_definition = self.response_format.to_grammar()
     elif tool_parser:
-      grammar_definition = tool_parser.to_grammar(self.get_tools(), self.tool_choice == "required" or isinstance(self.tool_choice, SpecificToolChoice))
+      grammar_definition = tool_parser.to_grammar(self.get_tools(), self.tool_choice == "required" or isinstance(self.tool_choice, SpecificToolChoice), self.parallel_tool_calling)
 
     return GenerationOptions(max_completion_tokens=self.max_completion_tokens, stop=self.stop, grammar_definition=grammar_definition)
 
@@ -216,6 +218,7 @@ def parse_chat_request(data: dict, default_model: str):
     response_format=ResponseFormatAdapter.validate_python(data.get("response_format")) if "response_format" in data else None,
     tool_choice=ToolChoiceModel.validate_python(data.get("tool_choice")) if "tool_choice" in data else None,
     tool_behaviour=ToolBehaviour.model_validate(data.get("tool_behaviour")) if "tool_behaviour" in data else None,
+    parallel_tool_calling=data.get("parallel_tool_calls", False),
   )
 
 

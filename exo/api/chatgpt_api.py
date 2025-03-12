@@ -278,7 +278,7 @@ class ChatGPTAPI:
         #       - The message will either contain a tool call begining at the first token, or it will not contain any tool calls.
         #       - A tool call can be identified from the initial emitted chunk.
         #       - We do not stream tool calls, they are emitted in a single completion object.
-        if tool_parser and tool_parser.is_start_of_tool(result):
+        if tool_parser and tool_parser.is_start_of_tool_section(result):
           tool_calls = [{
             "index": i,
             "function": tool_call.model_dump(),
@@ -344,7 +344,7 @@ class ChatGPTAPI:
         if is_first_chunk:
           is_first_chunk = False
 
-          if tool_parser.is_start_of_tool(chunk):
+          if tool_parser.is_start_of_tool_section(chunk):
             tool_chunk = chunk
             continue
         elif tool_chunk is not None:
