@@ -78,7 +78,7 @@ class ChatCompletionRequest:
     return GenerationOptions(max_completion_tokens=self.max_completion_tokens, stop=self.stop, grammar_definition=grammar_definition)
 
   def get_tools(self):
-    return choose_tools(self.tool_choice, self.tools)
+    return choose_tools(self.tool_choice, self.tools) or []
 
   def get_tool_parser(self) -> Optional[ToolParser]:
     if self.tool_behaviour and not self.tool_behaviour.guided:

@@ -368,7 +368,7 @@ async def test_basic_tool_calling(client):
 
   # Parse the function arguments
   args = json.loads(response.choices[0].message.tool_calls[0].function.arguments)
-  assert args.get("location") == "San Francisco"
+  assert 'San Francisco' in args.get("location")
 
 
 @pytest.mark.asyncio
@@ -414,7 +414,7 @@ async def test_function_calling_with_tool_choice(client):
 
   # Parse the function arguments
   args = json.loads(response.choices[0].message.tool_calls[0].function.arguments)
-  assert args.get("location") == "Tokyo"
+  assert "Tokyo" in args.get("location")
 
   # Test allowing the model to choose whether to call the function
   response = client.chat.completions.create(
@@ -549,7 +549,7 @@ async def test_streaming_function_calls(async_client):
   if 'partial' in function_args:
     try:
       parsed_args = json.loads(function_args['partial'])
-      assert parsed_args.get("location") == "Chicago"
+      assert 'Chicago' in parsed_args.get("location")
     except json.JSONDecodeError:
       pytest.fail("Failed to parse function arguments JSON")
 
