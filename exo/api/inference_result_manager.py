@@ -13,6 +13,15 @@ class InferenceResultChunk(BaseModel):
   is_finished: bool
   finish_reason: Optional[str]
 
+  def extend(self, other: "InferenceResultChunk"):
+    if self.is_finished:
+      raise ValueError("Cannot extend a finished chunk")
+
+    self.text += other.text
+    self.tokens.extend(other.tokens)
+    self.is_finished = other.is_finished
+    self.finish_reason = other.finish_reason
+
 
 class InferenceResultManager:
   node: Node

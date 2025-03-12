@@ -1,3 +1,4 @@
+import time
 import uuid
 import asyncio
 import json
@@ -9,7 +10,7 @@ import traceback
 import signal
 
 from exo import DEBUG
-from exo.helpers import PrefixDict, shutdown, get_exo_images_dir
+from exo.helpers import PrefixDict, shutdown, get_exo_images_dir, VERSION
 from exo.inference.tokenizers import resolve_tokenizer, Tokenizer
 from exo.orchestration import Node
 from exo.models import build_base_shard, build_full_shard, model_cards, get_repo, get_supported_models, get_pretty_name
@@ -277,11 +278,57 @@ class ChatGPTAPI:
       return web.json_response({"detail": f"Error processing request: {str(e)}"}, status=500)
 
   async def handle_chat_completions_streaming(self, request_id: str, chat_request: ChatCompletionRequest, tokenizer, prompt: str):
+    tool_parser = chat_request.get_tool_parser()
+    is_first_chunk = True
+    tool_chunk = None
+
     async for chunk in self.result_manager.get_inference_result(request_id, timeout=self.response_timeout):
       if DEBUG >= 2: print(f"[ChatGPTAPI] Got token chunk: {request_id=} {chunk.text=} {chunk.is_finished=} {chunk.finish_reason=}")
 
       if not chunk.text and not chunk.is_finished:
         continue
+
+      # TODO: This is a hack to get around the lack of information we get out of the tool parser as to its state
+      #       This provides the following simplifying assumptions:
+      #       - The message will either contain a tool call begining at the first token, or it will not contain any tool calls.
+      #       - A tool call can be identified from the initial emitted chunk.
+      #       - We do not stream tool calls, they are emitted in a single completion object.
+      if tool_parser:
+        if is_first_chunk:
+          is_first_chunk = False
+
+          if tool_parser.is_start_of_tool(chunk):
+            tool_chunk = chunk
+            continue
+        elif tool_chunk is not None:
+          tool_chunk.extend(chunk)
+
+        if tool_chunk and tool_chunk.is_finished:
+          tool_calls = [{
+            "index": i,
+            "function": tool_call.model_dump(),
+            "id": f"tool_call_{str(uuid.uuid4())}",
+            "type": "function",
+          } for i, tool_call in enumerate(tool_parser.parse_complete(tool_chunk.text))]
+
+          completion = {
+            "id": f"chatcmpl-{request_id}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": chat_request.model,
+            "system_fingerprint": f"exo_{VERSION}",
+            "choices": [{
+              "index": 0,
+              "logprobs": None,
+              "finish_reason": tool_chunk.finish_reason,
+              "delta": {
+                "tool_calls": tool_calls,
+              }
+            }],
+          }
+
+          yield completion
+          return
 
       # Generate completion response with tokens for metrics
       completion = generate_completion(
