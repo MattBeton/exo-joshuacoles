@@ -7,7 +7,7 @@ from exo import VERSION, DEBUG
 from exo.api.response_formats import ResponseFormat, ResponseFormatAdapter
 from exo.inference.generation_options import GenerationOptions
 from exo.models import get_default_tool_format
-from exo.tools import ToolChoice, ToolChoiceModel
+from exo.tools import ToolChoice, ToolChoiceModel, choose_tools
 from exo.tools.tool_parser import ToolParser, get_tool_parser_by_name
 
 
@@ -62,6 +62,9 @@ class ChatCompletionRequest:
       grammar_definition = tool_parser.to_grammar()
 
     return GenerationOptions(max_completion_tokens=self.max_completion_tokens, stop=self.stop, grammar_definition=grammar_definition)
+
+  def get_tools(self):
+    return choose_tools(self.tool_choice, self.tools)
 
   def get_tool_parser(self) -> Optional[ToolParser]:
     if self.tool_behaviour and not self.tool_behaviour.guided:
