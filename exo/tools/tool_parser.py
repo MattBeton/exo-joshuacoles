@@ -23,7 +23,7 @@ class ToolParser(ABC):
     ...
 
   @abstractmethod
-  def to_grammar(self) -> str:
+  def to_grammar(self, tools: list[Any], required: bool) -> str:
     ...
 
 

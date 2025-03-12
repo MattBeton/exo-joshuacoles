@@ -34,5 +34,7 @@ def choose_tools(tool_choice: ToolChoice, tools: List[Tool]) -> List[Tool]:
         return tools
     elif isinstance(tool_choice, SpecificToolChoice):
         return [tool for tool in tools if tool.name == tool_choice.function.name]
+    elif tool_choice is None:
+      return tools
     else:
         raise ValueError(f"Invalid tool choice: {tool_choice}")
