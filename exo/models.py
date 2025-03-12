@@ -12,6 +12,7 @@ class ModelCard(BaseModel):
   layers: int
   repo: dict[InferenceEngineType, str]
 
+  default_tool_call_format: Optional[str] = None
   chat_template: Optional[str] = None
 
 ModelCardCollection = dict[str, ModelCard]
@@ -33,6 +34,7 @@ model_cards: ModelCardCollection = {
       "MLXDynamicShardInferenceEngine": "mlx-community/Llama-3.2-1B-Instruct-4bit",
       "TinygradDynamicShardInferenceEngine": "unsloth/Llama-3.2-1B-Instruct",
     },
+    default_tool_call_format="llama_python_tag"
   ),
   "llama-3.2-1b-8bit": ModelCard(
     pretty_name="Llama 3.2 1B (8-bit)",
@@ -565,7 +567,7 @@ def get_pretty_name(model_id: str) -> Optional[str]:
   return model_card.pretty_name if model_card else None
 
 def get_default_tool_format(model_id: str) -> Optional[str]:
-  ...
+  return "llama_python_tag"
 
 def build_base_shard(model_id: str, inference_engine_classname: str) -> Optional[Shard]:
   model_card = model_cards.get(model_id)

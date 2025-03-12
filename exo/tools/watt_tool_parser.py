@@ -3,6 +3,7 @@ import re
 
 from exo import DEBUG
 from exo.api.inference_result_manager import InferenceResultChunk
+from exo.inference.grammars import lark_grammar
 from exo.tools.tool_parser import ToolParser, UnplacedToolCall
 
 
@@ -14,8 +15,9 @@ class WattToolParser(ToolParser):
     import os
 
     with open(os.path.join(os.path.dirname(__file__), "watt_grammar.lark"), "r") as f:
-      return f.read().replace("%%FUNCTION_NAME%%", self._generate_function_names(tools)).replace("%%ENTRY_PRODUCTION%%",
-                                                                                                 "function_call_expression" if required else "TEXT | function_call_expression").strip()
+      return lark_grammar(
+        f.read().replace("%%FUNCTION_NAME%%", self._generate_function_names(tools)).replace("%%ENTRY_PRODUCTION%%",
+                                                                                            "function_call_expression" if required else "TEXT | function_call_expression").strip())
 
   def _generate_function_names(self, tools) -> str:
     """Generate a grammar rule for function names based on available tools."""
