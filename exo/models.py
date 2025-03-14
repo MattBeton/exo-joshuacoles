@@ -51,6 +51,118 @@ model_cards: ModelCardCollection = {
        "MLXDynamicShardInferenceEngine": "mlx-community/Llama-3.2-3B-Instruct-4bit",
        "TinygradDynamicShardInferenceEngine": "unsloth/Llama-3.2-3B-Instruct",
     },
+    default_tool_call_format="llama_python_tag",
+    chat_template="""
+{{- bos_token }}
+
+{%- if custom_tools is defined %}
+    {%- set tools = custom_tools %}
+{%- endif %}
+
+{%- if not tools_in_user_message is defined %}
+    {%- set tools_in_user_message = true %}
+{%- endif %}
+
+{%- if not date_string is defined %}
+    {%- if strftime_now is defined %}
+        {%- set date_string = strftime_now("%d %b %Y") %}
+    {%- else %}
+        {%- set date_string = "26 Jul 2024" %}
+    {%- endif %}
+{%- endif %}
+
+{%- if not tools is defined %}
+    {%- set tools = none %}
+{%- endif %}
+
+{# Extract the system message to slot it in the right place. #}
+{%- if messages[0]['role'] == 'system' %}
+    {%- set system_message = messages[0]['content']|trim %}
+    {%- set messages = messages[1:] %}
+{%- else %}
+    {%- set system_message = "" %}
+{%- endif %}
+
+{# System message #}
+{{- "<|start_header_id|>system<|end_header_id|>\n\n" }}
+
+{%- if tools is not none %}
+    {{- "Environment: ipython\n" }}
+{%- endif %}
+
+{{- "Cutting Knowledge Date: December 2023\n" }}
+{{- "Today Date: " + date_string + "\n\n" }}
+
+{%- if tools is not none and not tools_in_user_message %}
+    {{- "You have access to the following functions. To call a function, please respond with JSON for a function call." }}
+    {{- 'Respond in the format <|python_tag|>{"name": function name, "parameters": dictionary of argument name and its value}<|eom_id|>.' }}
+    {{- 'EITHER respond with a pure function call (only JSON), or an entirely natural language response. Mixed responses are not allowed.' }}
+    {{- "Do not use variables.\n\n" }}
+
+    {%- for t in tools %}
+        {{- t | tojson(indent=4) }}
+        {{- "\n\n" }}
+    {%- endfor %}
+{%- endif %}
+
+{{- system_message }}
+{{- "<|eot_id|>" }}
+
+{# Custom tools are passed in a user message with extra guidance #}
+{%- if tools_in_user_message and not tools is none %}
+    {# Extract the first user message to plug it in here #}
+    {%- if messages | length != 0 %}
+        {%- set first_user_message = messages[0]['content']|trim %}
+        {%- set messages = messages[1:] %}
+    {%- else %}
+        {{- raise_exception("Cannot put tools in the first user message when there's no first user message!") }}
+    {%- endif %}
+
+    {{- '<|start_header_id|>user<|end_header_id|>\n\n' }}
+    {{- "Given the following functions, either respond in natural language or with a JSON-formatted function call." }}
+    {{- 'If you are calling a function, respond with a JSON-formatted function call wrapped in <|python_tag|>: ' -}}
+    {{- 'The assistant response will look like <|start_header_id|>assistant<|end_header_id|><|python_tag|>{"name": function name, "parameters": {arguments}}<|eom_id|>.' }}
+    {{- 'Do NOT mix natural language and JSON in one response. If functions have no arguments, respond with an empty dictionary for "parameters".' }}
+    {{- "Do not use variables.\n\n" }}
+
+    {%- for t in tools %}
+        {{- t | tojson(indent=4) }}
+        {{- "\n\n" }}
+    {%- endfor %}
+
+    {{- first_user_message + "<|eot_id|>" }}
+{%- endif %}
+
+{%- for message in messages %}
+    {%- if not (message.role == 'ipython' or message.role == 'tool' or 'tool_calls' in message) %}
+        {{- '<|start_header_id|>' + message['role'] + '<|end_header_id|>\n\n' + message['content']|trim + '<|eot_id|>' }}
+    {%- elif 'tool_calls' in message %}
+        {%- if not message.tool_calls|length == 1 %}
+            {{- raise_exception("This model only supports single tool-calls at once!") }}
+        {%- endif %}
+
+        {%- set tool_call = message.tool_calls[0].function %}
+        {{- '<|start_header_id|>assistant<|end_header_id|>\n\n' }}
+        {{- '{"name": "' + tool_call.name + '", ' }}
+        {{- '"parameters": ' }}
+        {{- tool_call.arguments | tojson }}
+        {{- "}" }}
+        {{- "<|eot_id|>" }}
+    {%- elif message.role == "tool" or message.role == "ipython" %}
+        {{- "<|start_header_id|>ipython<|end_header_id|>\n\n" }}
+        {%- if message.content is mapping or message.content is iterable %}
+            {{- message.content | tojson }}
+        {%- else %}
+            {{- message.content }}
+        {%- endif %}
+        {{- "<|eot_id|>" }}
+    {%- endif %}
+{%- endfor %}
+
+{%- if add_generation_prompt %}
+    {{- '<|start_header_id|>assistant<|end_header_id|>\n\n' }}
+{%- endif %}
+"""
   ),
   "llama-3.2-3b-8bit": ModelCard(
     pretty_name="Llama 3.2 3B (8-bit)",
