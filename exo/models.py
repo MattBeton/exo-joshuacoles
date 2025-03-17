@@ -1,11 +1,26 @@
+import json
 from pydantic import BaseModel
 from pathlib import Path
 
+from exo import DEBUG
 from exo.inference.shard import Shard
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Dict, Union
 
 # InferenceEngineType = Literal["MLXDynamicShardInferenceEngine", "TinygradDynamicShardInferenceEngine", "DummyInferenceEngine"]
 InferenceEngineType = str
+
+## Badly engineered at the moment, just copying the message class from chat_completion_request...
+class Message:
+  def __init__(self, role: str, content: Union[str, List[Dict[str, Union[str, Dict[str, str]]]]], tools: Optional[List[Dict]] = None):
+    self.role = role
+    self.content = content
+    self.tools = tools
+
+  def to_dict(self):
+    data = {"role": self.role, "content": self.content}
+    if self.tools:
+      data["tools"] = self.tools
+    return data
 
 class ModelCard(BaseModel):
   pretty_name: str
@@ -14,6 +29,63 @@ class ModelCard(BaseModel):
 
   default_tool_call_format: Optional[str] = None
   chat_template: Optional[str] = None
+
+  def build_prompt(self, tokenizer, messages, tools: Optional[List[Dict]] = None) -> str:
+    chat_template_args = {"conversation": [m if isinstance(m, Dict) else m.to_dict() for m in messages], "tokenize": False, "add_generation_prompt": True}
+    if tools:
+      chat_template_args["tools"] = tools
+
+    try:
+      prompt = tokenizer.apply_chat_template(**chat_template_args)
+      if DEBUG >= 3: print(f"!!! Prompt: {prompt}")
+      return prompt
+    except UnicodeEncodeError:
+      # Handle Unicode encoding by ensuring everything is UTF-8
+      chat_template_args["conversation"] = [
+        {k: v.encode('utf-8').decode('utf-8') if isinstance(v, str) else v
+        for k, v in m.to_dict().items()}
+        for m in messages
+      ]
+      prompt = tokenizer.apply_chat_template(**chat_template_args)
+      if DEBUG >= 3: print(f"!!! Prompt (UTF-8 encoded): {prompt}")
+      return prompt
+
+class LlamaLightweightModelCard(ModelCard):
+  default_tool_call_format: Optional[str] = "llama_lightweight"
+
+  def build_prompt(self, tokenizer, messages, tools: Optional[List[Dict]] = None) -> str:
+    if tools:
+      # tools = [tool.model_dump() for tool in tools]
+      function_definitions = json.dumps(tools, indent=2)
+
+      system_prompt = """You are an expert in composing functions. You are given a question and a set of possible functions. 
+      Based on the question, you will need to make one or more function/tool calls to achieve the purpose. 
+      If none of the function can be used, point it out. If the given question lacks the parameters required by the function,
+      also point it out. You should only return the function call in tools call sections.
+
+      If you decide to invoke any of the function(s), you MUST put it in the format of [func_name1(params_name1=params_value1, params_name2=params_value2...), func_name2(params)]\n
+      You SHOULD NOT include any other text in the response.
+
+      Here is a list of functions in JSON format that you can invoke.\n\n{functions}\n""".format(functions=function_definitions)
+
+      messages.insert(0, Message("system", system_prompt))
+
+    chat_template_args = {"conversation": [m if isinstance(m, Dict) else m.to_dict() for m in messages], "tokenize": False, "add_generation_prompt": True}
+   
+    try:
+      prompt = tokenizer.apply_chat_template(**chat_template_args)
+      if DEBUG >= 3: print(f"!!! Prompt: {prompt}")
+      return prompt
+    except UnicodeEncodeError:
+      # Handle Unicode encoding by ensuring everything is UTF-8
+      chat_template_args["conversation"] = [
+        {k: v.encode('utf-8').decode('utf-8') if isinstance(v, str) else v
+        for k, v in m.to_dict().items()}
+        for m in messages
+      ]
+      prompt = tokenizer.apply_chat_template(**chat_template_args)
+      if DEBUG >= 3: print(f"!!! Prompt (UTF-8 encoded): {prompt}")
+      return prompt
 
 ModelCardCollection = dict[str, ModelCard]
 
@@ -27,16 +99,15 @@ model_cards: ModelCardCollection = {
        "TinygradDynamicShardInferenceEngine": "unsloth/Llama-3.3-70B-Instruct",
     },
   ),
-  "llama-3.2-1b": ModelCard(
+  "llama-3.2-1b": LlamaLightweightModelCard(
     pretty_name="Llama 3.2 1B",
     layers=16,
     repo={
       "MLXDynamicShardInferenceEngine": "mlx-community/Llama-3.2-1B-Instruct-4bit",
       "TinygradDynamicShardInferenceEngine": "unsloth/Llama-3.2-1B-Instruct",
     },
-    default_tool_call_format="llama_python_tag"
   ),
-  "llama-3.2-1b-8bit": ModelCard(
+  "llama-3.2-1b-8bit": LlamaLightweightModelCard(
     pretty_name="Llama 3.2 1B (8-bit)",
     layers=16,
     repo={
@@ -44,127 +115,15 @@ model_cards: ModelCardCollection = {
       "TinygradDynamicShardInferenceEngine": "unsloth/Llama-3.2-1B-Instruct",
     },
   ),
-  "llama-3.2-3b": ModelCard(
+  "llama-3.2-3b": LlamaLightweightModelCard(
     pretty_name="Llama 3.2 3B",
     layers=28,
     repo={
        "MLXDynamicShardInferenceEngine": "mlx-community/Llama-3.2-3B-Instruct-4bit",
        "TinygradDynamicShardInferenceEngine": "unsloth/Llama-3.2-3B-Instruct",
     },
-    default_tool_call_format="llama_python_tag",
-    chat_template="""
-{{- bos_token }}
-
-{%- if custom_tools is defined %}
-    {%- set tools = custom_tools %}
-{%- endif %}
-
-{%- if not tools_in_user_message is defined %}
-    {%- set tools_in_user_message = true %}
-{%- endif %}
-
-{%- if not date_string is defined %}
-    {%- if strftime_now is defined %}
-        {%- set date_string = strftime_now("%d %b %Y") %}
-    {%- else %}
-        {%- set date_string = "26 Jul 2024" %}
-    {%- endif %}
-{%- endif %}
-
-{%- if not tools is defined %}
-    {%- set tools = none %}
-{%- endif %}
-
-{# Extract the system message to slot it in the right place. #}
-{%- if messages[0]['role'] == 'system' %}
-    {%- set system_message = messages[0]['content']|trim %}
-    {%- set messages = messages[1:] %}
-{%- else %}
-    {%- set system_message = "" %}
-{%- endif %}
-
-{# System message #}
-{{- "<|start_header_id|>system<|end_header_id|>\n\n" }}
-
-{%- if tools is not none %}
-    {{- "Environment: ipython\n" }}
-{%- endif %}
-
-{{- "Cutting Knowledge Date: December 2023\n" }}
-{{- "Today Date: " + date_string + "\n\n" }}
-
-{%- if tools is not none and not tools_in_user_message %}
-    {{- "You have access to the following functions. To call a function, please respond with JSON for a function call." }}
-    {{- 'Respond in the format <|python_tag|>{"name": function name, "parameters": dictionary of argument name and its value}<|eom_id|>.' }}
-    {{- 'EITHER respond with a pure function call (only JSON), or an entirely natural language response. Mixed responses are not allowed.' }}
-    {{- "Do not use variables.\n\n" }}
-
-    {%- for t in tools %}
-        {{- t | tojson(indent=4) }}
-        {{- "\n\n" }}
-    {%- endfor %}
-{%- endif %}
-
-{{- system_message }}
-{{- "<|eot_id|>" }}
-
-{# Custom tools are passed in a user message with extra guidance #}
-{%- if tools_in_user_message and not tools is none %}
-    {# Extract the first user message to plug it in here #}
-    {%- if messages | length != 0 %}
-        {%- set first_user_message = messages[0]['content']|trim %}
-        {%- set messages = messages[1:] %}
-    {%- else %}
-        {{- raise_exception("Cannot put tools in the first user message when there's no first user message!") }}
-    {%- endif %}
-
-    {{- '<|start_header_id|>user<|end_header_id|>\n\n' }}
-    {{- "Given the following functions, either respond in natural language or with a JSON-formatted function call." }}
-    {{- 'If you are calling a function, respond with a JSON-formatted function call wrapped in <|python_tag|>: ' -}}
-    {{- 'The assistant response will look like <|start_header_id|>assistant<|end_header_id|><|python_tag|>{"name": function name, "parameters": {arguments}}<|eom_id|>.' }}
-    {{- 'Do NOT mix natural language and JSON in one response. If functions have no arguments, respond with an empty dictionary for "parameters".' }}
-    {{- "Do not use variables.\n\n" }}
-
-    {%- for t in tools %}
-        {{- t | tojson(indent=4) }}
-        {{- "\n\n" }}
-    {%- endfor %}
-
-    {{- first_user_message + "<|eot_id|>" }}
-{%- endif %}
-
-{%- for message in messages %}
-    {%- if not (message.role == 'ipython' or message.role == 'tool' or 'tool_calls' in message) %}
-        {{- '<|start_header_id|>' + message['role'] + '<|end_header_id|>\n\n' + message['content']|trim + '<|eot_id|>' }}
-    {%- elif 'tool_calls' in message %}
-        {%- if not message.tool_calls|length == 1 %}
-            {{- raise_exception("This model only supports single tool-calls at once!") }}
-        {%- endif %}
-
-        {%- set tool_call = message.tool_calls[0].function %}
-        {{- '<|start_header_id|>assistant<|end_header_id|>\n\n' }}
-        {{- '{"name": "' + tool_call.name + '", ' }}
-        {{- '"parameters": ' }}
-        {{- tool_call.arguments | tojson }}
-        {{- "}" }}
-        {{- "<|eot_id|>" }}
-    {%- elif message.role == "tool" or message.role == "ipython" %}
-        {{- "<|start_header_id|>ipython<|end_header_id|>\n\n" }}
-        {%- if message.content is mapping or message.content is iterable %}
-            {{- message.content | tojson }}
-        {%- else %}
-            {{- message.content }}
-        {%- endif %}
-        {{- "<|eot_id|>" }}
-    {%- endif %}
-{%- endfor %}
-
-{%- if add_generation_prompt %}
-    {{- '<|start_header_id|>assistant<|end_header_id|>\n\n' }}
-{%- endif %}
-"""
   ),
-  "llama-3.2-3b-8bit": ModelCard(
+  "llama-3.2-3b-8bit": LlamaLightweightModelCard(
     pretty_name="Llama 3.2 3B (8-bit)",
     layers=28,
     repo={
@@ -172,7 +131,7 @@ model_cards: ModelCardCollection = {
        "TinygradDynamicShardInferenceEngine": "unsloth/Llama-3.2-3B-Instruct",
     },
   ),
-  "llama-3.2-3b-bf16": ModelCard(
+  "llama-3.2-3b-bf16": LlamaLightweightModelCard(
     pretty_name="Llama 3.2 3B (BF16)",
     layers=28,
     repo={

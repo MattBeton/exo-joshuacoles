@@ -11,7 +11,7 @@ import signal
 
 from exo import DEBUG
 from exo.helpers import PrefixDict, shutdown, get_exo_images_dir, VERSION
-from exo.inference.tokenizers import resolve_tokenizer, Tokenizer
+from exo.inference.tokenizers import resolve_tokenizer
 from exo.orchestration import Node
 from exo.models import build_base_shard, build_full_shard, model_cards, get_repo, get_supported_models, get_pretty_name, \
   get_model_card
@@ -69,27 +69,6 @@ def remap_messages(messages: List[Message]) -> List[Message]:
             return remapped_messages
 
   return remapped_messages
-
-def build_prompt(tokenizer, _messages: List[Message], tools: Optional[List[Dict]] = None):
-  messages = _messages # TODO: Re-enable remap_messages(_messages)
-  chat_template_args = {"conversation": [m if isinstance(m, Dict) else m.to_dict() for m in messages], "tokenize": False, "add_generation_prompt": True}
-  if tools:
-    chat_template_args["tools"] = tools
-
-  try:
-    prompt = tokenizer.apply_chat_template(**chat_template_args)
-    if DEBUG >= 3: print(f"!!! Prompt: {prompt}")
-    return prompt
-  except UnicodeEncodeError:
-    # Handle Unicode encoding by ensuring everything is UTF-8
-    chat_template_args["conversation"] = [
-      {k: v.encode('utf-8').decode('utf-8') if isinstance(v, str) else v
-       for k, v in m.to_dict().items()}
-      for m in messages
-    ]
-    prompt = tokenizer.apply_chat_template(**chat_template_args)
-    if DEBUG >= 3: print(f"!!! Prompt (UTF-8 encoded): {prompt}")
-    return prompt
 
 def parse_message(data: dict):
   if "role" not in data or "content" not in data:
@@ -249,7 +228,8 @@ class ChatGPTAPI:
     shard = build_base_shard(model, self.inference_engine_classname)
     messages = [parse_message(msg) for msg in data.get("messages", [])]
     tokenizer = await resolve_tokenizer(get_repo(shard.model_id, self.inference_engine_classname))
-    prompt = build_prompt(tokenizer, messages, data.get("tools", None))
+    model_card = get_model_card(model)
+    prompt = model_card.build_prompt(tokenizer, messages, data.get("tools", None))
     tokens = tokenizer.encode(prompt)
     return web.json_response({
       "length": len(prompt),
@@ -301,7 +281,8 @@ class ChatGPTAPI:
     if model_card and model_card.chat_template:
       tokenizer.chat_template = model_card.chat_template
 
-    prompt = build_prompt(tokenizer, chat_request.messages, [tool.model_dump() for tool in chat_request.get_tools()])
+    prompt = model_card.build_prompt(tokenizer, chat_request.messages, [tool.model_dump() for tool in chat_request.get_tools()])
+    # prompt = model_card.build_prompt(tokenizer, chat_request.messages)
     request_id = str(uuid.uuid4())
 
     # Register tokenizer and model with the result manager
